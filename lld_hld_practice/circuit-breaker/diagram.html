@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Circuit Breaker — Diagram</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 24px; background: #fff; color: #1a1a1a; }
+  h1 { font-size: 18px; font-weight: 500; margin-bottom: 4px; }
+  p { font-size: 13px; color: #666; margin-top: 0 }
+  svg { width: 100%; height: auto; display: block; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #1a1a1a; color: #e0e0e0; }
+    p { color: #999; }
+  }
+</style>
+</head>
+<body>
+<h1>Circuit Breaker — Mental Model</h1>
+<p>State machine · Sidecar pattern · Redis Hash · Fail CLOSED · L5 EM level</p>
+<svg viewBox="0 0 900 660" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#888" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arr-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#D85A30" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#1D9E75" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- STATE MACHINE section -->
+  <rect x="10" y="10" width="880" height="26" rx="6" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="450" y="27" text-anchor="middle" font-size="13" font-weight="500" fill="#3C3489">State machine</text>
+
+  <!-- CLOSED state -->
+  <rect x="60" y="56" width="120" height="50" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="1.5"/>
+  <text x="120" y="78" text-anchor="middle" font-size="13" font-weight="500" fill="#27500A">CLOSED</text>
+  <text x="120" y="96" text-anchor="middle" font-size="10" fill="#3B6D11">requests allowed</text>
+
+  <!-- CLOSED → OPEN -->
+  <line x1="180" y1="81" x2="348" y2="81" stroke="#D85A30" stroke-width="1.2" marker-end="url(#arr-red)"/>
+  <text x="264" y="72" text-anchor="middle" font-size="10" fill="#D85A30">failures &gt;= threshold</text>
+
+  <!-- OPEN state -->
+  <rect x="350" y="56" width="120" height="50" rx="8" fill="#FCEBEB" stroke="#A32D2D" stroke-width="1.5"/>
+  <text x="410" y="78" text-anchor="middle" font-size="13" font-weight="500" fill="#791F1F">OPEN</text>
+  <text x="410" y="96" text-anchor="middle" font-size="10" fill="#A32D2D">fast-fail · 503</text>
+
+  <!-- OPEN → HALF_OPEN -->
+  <line x1="470" y1="81" x2="638" y2="81" stroke="#BA7517" stroke-width="1.2" marker-end="url(#arr)"/>
+  <text x="554" y="72" text-anchor="middle" font-size="10" fill="#BA7517">resetTimeout elapsed</text>
+
+  <!-- HALF_OPEN state -->
+  <rect x="640" y="56" width="120" height="50" rx="8" fill="#FAEEDA" stroke="#854F0B" stroke-width="1.5"/>
+  <text x="700" y="78" text-anchor="middle" font-size="13" font-weight="500" fill="#633806">HALF_OPEN</text>
+  <text x="700" y="96" text-anchor="middle" font-size="10" fill="#854F0B">one probe</text>
+
+  <!-- HALF_OPEN → CLOSED (success) -->
+  <path d="M700 106 Q700 140 120 140 Q120 120 120 106" fill="none" stroke="#1D9E75" stroke-width="1.2" marker-end="url(#arr-green)"/>
+  <text x="410" y="155" text-anchor="middle" font-size="10" fill="#1D9E75">probe success → CLOSED</text>
+
+  <!-- HALF_OPEN → OPEN (fail) -->
+  <path d="M700 56 Q700 30 410 30 Q410 46 410 56" fill="none" stroke="#D85A30" stroke-width="1.2" marker-end="url(#arr-red)"/>
+  <text x="555" y="24" text-anchor="middle" font-size="10" fill="#D85A30">probe fails → OPEN</text>
+
+  <!-- DOMAIN section -->
+  <rect x="10" y="174" width="880" height="26" rx="6" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="450" y="191" text-anchor="middle" font-size="13" font-weight="500" fill="#3C3489">Domain</text>
+
+  <rect x="10" y="210" width="200" height="40" rx="6" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="110" y="226" text-anchor="middle" font-size="12" font-weight="500" fill="#3C3489">Configuration</text>
+  <text x="110" y="242" text-anchor="middle" font-size="10" fill="#534AB7">failureThreshold · resetTimeout</text>
+
+  <rect x="222" y="210" width="310" height="40" rx="6" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="377" y="226" text-anchor="middle" font-size="12" font-weight="500" fill="#3C3489">State</text>
+  <text x="377" y="242" text-anchor="middle" font-size="10" fill="#534AB7">status · failureCount · lastFailureTime · probeInFlight</text>
+
+  <rect x="544" y="210" width="346" height="40" rx="6" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="717" y="226" text-anchor="middle" font-size="12" font-weight="500" fill="#3C3489">Events</text>
+  <text x="717" y="242" text-anchor="middle" font-size="10" fill="#534AB7">newRequest · successfulResponse · failedResponse</text>
+
+  <!-- HLD section -->
+  <rect x="10" y="264" width="880" height="26" rx="6" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="450" y="281" text-anchor="middle" font-size="13" font-weight="500" fill="#085041">HLD</text>
+
+  <!-- Components flow -->
+  <rect x="10" y="300" width="80" height="36" rx="6" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="50" y="322" text-anchor="middle" font-size="11" font-weight="500" fill="#085041">Client</text>
+
+  <line x1="90" y1="318" x2="118" y2="318" stroke="#888" stroke-width="1" marker-end="url(#arr)"/>
+
+  <rect x="120" y="300" width="120" height="36" rx="6" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="180" y="316" text-anchor="middle" font-size="11" font-weight="500" fill="#085041">API Gateway</text>
+  <text x="180" y="330" text-anchor="middle" font-size="9" fill="#0F6E56">L1 IP + Auth</text>
+
+  <line x1="240" y1="318" x2="268" y2="318" stroke="#888" stroke-width="1" marker-end="url(#arr)"/>
+
+  <rect x="270" y="300" width="90" height="36" rx="6" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="315" y="322" text-anchor="middle" font-size="11" font-weight="500" fill="#085041">Load Balancer</text>
+
+  <line x1="360" y1="318" x2="388" y2="318" stroke="#888" stroke-width="1" marker-end="url(#arr)"/>
+
+  <rect x="390" y="290" width="160" height="56" rx="6" fill="#E1F5EE" stroke="#0F6E56" stroke-width="1.5"/>
+  <text x="470" y="312" text-anchor="middle" font-size="11" font-weight="500" fill="#085041">Service + Sidecar CB</text>
+  <text x="470" y="328" text-anchor="middle" font-size="9" fill="#0F6E56">stateless · localhost call</text>
+  <text x="470" y="340" text-anchor="middle" font-size="9" fill="#0F6E56">no extra network hop</text>
+
+  <line x1="550" y1="318" x2="578" y2="318" stroke="#888" stroke-width="1" marker-end="url(#arr)"/>
+
+  <rect x="580" y="300" width="110" height="36" rx="6" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="635" y="316" text-anchor="middle" font-size="11" font-weight="500" fill="#085041">Redis Hash</text>
+  <text x="635" y="330" text-anchor="middle" font-size="9" fill="#0F6E56">circuit:{serviceId}</text>
+
+  <line x1="690" y1="318" x2="718" y2="318" stroke="#888" stroke-width="1" marker-end="url(#arr)"/>
+
+  <rect x="720" y="300" width="80" height="36" rx="6" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="760" y="316" text-anchor="middle" font-size="11" font-weight="500" fill="#085041">Downstream</text>
+  <text x="760" y="330" text-anchor="middle" font-size="9" fill="#0F6E56">protected service</text>
+
+  <!-- Redis replica -->
+  <rect x="580" y="348" width="110" height="30" rx="6" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5" stroke-dasharray="4 2"/>
+  <text x="635" y="367" text-anchor="middle" font-size="10" fill="#0F6E56">Redis Replica</text>
+  <line x1="635" y1="336" x2="635" y2="348" stroke="#888" stroke-width="0.8"/>
+
+  <!-- 3 paths -->
+  <rect x="10" y="392" width="880" height="80" rx="6" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="22" y="412" font-size="12" font-weight="500" fill="#085041">End-to-End Paths</text>
+  <text x="22" y="430" font-size="11" fill="#0F6E56">✓  Path 1 (CLOSED):    Sidecar checks Redis → CLOSED → call Downstream → success → failureCount=0 → 200</text>
+  <text x="22" y="448" font-size="11" fill="#0F6E56">✗  Path 2 (OPEN):      Sidecar checks Redis → OPEN → fast-fail 503 (downstream never called)</text>
+  <text x="22" y="466" font-size="11" fill="#0F6E56">⚠  Path 3 (Redis down): Redis unreachable → default OPEN → 503 → fire alert  (opposite of rate limiter)</text>
+
+  <!-- LLD section -->
+  <rect x="10" y="486" width="880" height="26" rx="6" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="450" y="503" text-anchor="middle" font-size="13" font-weight="500" fill="#0C447C">LLD</text>
+
+  <rect x="10" y="522" width="420" height="60" rx="6" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="220" y="540" text-anchor="middle" font-size="12" font-weight="500" fill="#0C447C">Methods (all synchronized)</text>
+  <text x="22" y="558" font-size="10" fill="#185FA5">allowRequest() · recordSuccess() · recordFailure()</text>
+  <text x="22" y="574" font-size="10" fill="#185FA5">halfOpenProbeInFlight gates single probe · released in both record methods</text>
+
+  <rect x="442" y="522" width="448" height="60" rx="6" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+  <text x="666" y="540" text-anchor="middle" font-size="12" font-weight="500" fill="#0C447C">Production upgrade</text>
+  <text x="454" y="558" font-size="10" fill="#185FA5">Local: synchronized on this · single JVM</text>
+  <text x="454" y="574" font-size="10" fill="#185FA5">Distributed: Redis Lua script replaces all 3 methods atomically</text>
+
+  <!-- API section -->
+  <rect x="10" y="596" width="880" height="26" rx="6" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/>
+  <text x="450" y="613" text-anchor="middle" font-size="13" font-weight="500" fill="#633806">API Design</text>
+
+  <rect x="10" y="632" width="420" height="24" rx="6" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/>
+  <text x="22" y="648" font-size="10" fill="#854F0B">POST /circuit/{serviceId}/request · success · failure   GET /circuit/{serviceId}/status</text>
+
+  <rect x="442" y="632" width="448" height="24" rx="6" fill="#FAEEDA" stroke="#854F0B" stroke-width="0.5"/>
+  <text x="454" y="648" font-size="10" fill="#854F0B">200 allowed · 503 OPEN fast-fail · 503 Redis down   503 vs 429: downstream unavailable vs caller throttled</text>
+
+</svg>
+</body>
+</html>
