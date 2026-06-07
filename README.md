@@ -5,3 +5,4 @@ This repository contains a collection of Low-Level Design (LLD) and High-Level D
 - [Fixed Window Rate Limiter](./fixed-window-rate-limiter/README.md)
 - [Sliding Window Rate Limiter](./sliding-window-rate-limiter/README.md)
 - [Circuit Breaker](./circuit-breaker/README.md)
+- [Distributed Lock](./distributed-lock/README.md)
